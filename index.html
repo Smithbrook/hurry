@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HurryHurry — How fast are you?</title>
+<meta name="description" content="A beautiful, minimal reaction time test. When the screen turns green, tap as fast as you can.">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="black">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%234b3cff'/%3E%3Cpath d='M13 3 L6 13 H11 L10 21 L18 10 H13 L14 3 Z' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1a1a1a; --muted:#71717a; --border:#e4e4e7; --card:#fafafa;
+    --accent:#4b3cff; --accent-soft:rgba(75,60,255,0.1);
+    --waiting-bg:#c8443b; --ready-bg:#2e9e6b;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Inter',sans-serif; background:var(--bg); color:var(--fg);
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  a{color:var(--accent);}
+
+  /* ---------- sidebar toggle ---------- */
+  .hh-sidebar-toggle{
+    position:fixed; top:18px; left:18px; z-index:30;
+    width:38px; height:38px; border-radius:10px;
+    border:1px solid var(--border); background:rgba(255,255,255,0.85); backdrop-filter:blur(6px);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--fg);
+  }
+  .hh-sidebar-toggle svg{width:18px;height:18px;}
+
+  /* ---------- sidebar panel ---------- */
+  .hh-sidebar{
+    position:fixed; top:0; left:0; bottom:0; width:266px; z-index:25;
+    background:#fbfbfa; border-right:1px solid var(--border);
+    transform:translateX(-100%); transition:transform .28s cubic-bezier(.4,0,.2,1);
+    display:flex; flex-direction:column; justify-content:space-between; padding:20px 18px;
+  }
+  .hh-sidebar.open{ transform:translateX(0); }
+  .hh-sidebar-brand{ display:flex; align-items:center; gap:10px; margin-bottom:22px; padding-left:44px; }
+  .hh-sidebar-brand .mark{ width:26px;height:26px;border-radius:6px;background:var(--accent);
+    display:flex;align-items:center;justify-content:center; flex:none; }
+  .hh-sidebar-brand .mark svg{width:15px;height:15px;}
+  .hh-sidebar-brand span{ font-family:'Manrope',sans-serif; font-weight:800; font-size:16px; }
+  .hh-sidebar-label{ font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted); margin:0 0 10px; }
+  .hh-sidebar ul{ margin:0; padding-left:18px; font-size:13px; line-height:1.7; color:#3f3f46; }
+  .hh-sidebar-support{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    font-family:'Manrope',sans-serif; font-weight:700; font-size:13.5px;
+    padding:10px 14px; border-radius:999px; text-decoration:none;
+    border:1px solid var(--border); color:var(--fg); margin-bottom:14px;
+  }
+  .hh-sidebar-support:hover{ border-color:var(--accent); color:var(--accent); }
+  .hh-sidebar-credit{ font-size:11.5px; color:var(--muted); margin:0 0 4px; }
+  .hh-sidebar-credit a{ color:var(--fg); }
+  .hh-sidebar-copy{ font-size:11px; color:#a1a1aa; margin:0; font-family:'JetBrains Mono',monospace; }
+
+  .hh-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:20;
+    opacity:0; pointer-events:none; transition:opacity .25s ease;
+  }
+  .hh-backdrop.show{ opacity:1; pointer-events:auto; }
+  @media (min-width:769px){ .hh-backdrop{ display:none; } }
+
+  /* ---------- shifting content wrapper ---------- */
+  .hh-shift{ transition:margin-left .28s cubic-bezier(.4,0,.2,1); margin-left:0; min-height:100dvh; display:flex; flex-direction:column; }
+  @media (min-width:769px){ .hh-shift.open{ margin-left:266px; } }
+
+  /* ---------- main tap surface ---------- */
+  .hh-surface{
+    flex:1; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:24px; cursor:pointer; user-select:none; -webkit-user-select:none;
+    touch-action:manipulation; position:relative; overflow:hidden;
+    background:var(--bg); color:var(--fg); transition:background-color .5s ease, color .5s ease;
+    border:none; font:inherit; min-height:70vh;
+  }
+  .hh-surface.waiting{ background:var(--waiting-bg); color:#fff; }
+  .hh-surface.ready{ background:var(--ready-bg); color:#fff; }
+
+  .hh-mark{ height:56px; width:auto; margin-bottom:6px; }
+  .hh-eyebrow{ font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.25em; opacity:.7; margin:0; }
+  .hh-headline{ font-family:'Manrope',sans-serif; font-weight:800; line-height:.95; letter-spacing:-0.01em;
+    margin:22px 0 0; font-size:clamp(38px,7vw,64px); }
+  .hh-headline.result{ font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; font-size:clamp(44px,8vw,72px); }
+  .hh-sub{ margin:22px 0 0; font-size:clamp(15px,2vw,18px); line-height:1.5; opacity:.75; max-width:420px; }
+  .hh-kbd-hint{ margin-top:30px; display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+  .hh-kbd-hint kbd{ border:1px solid var(--border); background:var(--card); border-radius:6px; padding:4px 8px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#52525b; }
+  .hh-badge{ margin-top:22px; border-radius:999px; padding:6px 16px; font-size:13px; font-weight:600; }
+  .hh-badge.best{ border:1px solid rgba(75,60,255,0.3); background:var(--accent-soft); color:var(--accent); }
+  .hh-badge.off{ border:1px solid var(--border); background:var(--card); color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+  @keyframes hh-flash{ 0%,100%{opacity:0;} 8%,22%{opacity:.85;} 15%{opacity:.2;} }
+  .hh-flash{ position:absolute; inset:0; background:#4b3cff; pointer-events:none; animation:hh-flash .7s ease-out both; }
+
+  @keyframes hh-pulse-ring{ 0%{opacity:.5; transform:scale(.85);} 100%{opacity:0; transform:scale(1.6);} }
+  .hh-pulse-ring::before,.hh-pulse-ring::after{
+    content:''; position:absolute; inset:0; margin:auto; width:220px; height:220px; border-radius:9999px;
+    border:2px solid rgba(255,255,255,0.7); animation:hh-pulse-ring 1.8s ease-out infinite;
+  }
+  .hh-pulse-ring::after{ animation-delay:.9s; }
+
+  @keyframes hh-calc-spin{ to{ transform:rotate(360deg); } }
+  .hh-calc-spin{ animation:hh-calc-spin .7s linear infinite; margin-top:8px; }
+
+  @keyframes hh-pop-in{ 0%{opacity:0; transform:scale(.6);} 60%{opacity:1; transform:scale(1.12);} 100%{opacity:1; transform:scale(1);} }
+  .hh-pop-in{ animation:hh-pop-in .4s ease-out both; }
+
+  @keyframes hh-rise{ 0%{opacity:0; transform:translateY(10px);} 100%{opacity:1; transform:translateY(0);} }
+  .hh-rise{ animation:hh-rise .5s ease-out both; }
+
+  @keyframes hh-bar-grow{ from{ transform:scaleX(0); } to{ transform:scaleX(var(--bar,1)); } }
+  .hh-bar{ transform-origin:left; animation:hh-bar-grow .6s cubic-bezier(.22,1,.36,1) both; }
+
+  @media (prefers-reduced-motion: reduce){
+    .hh-flash,.hh-pulse-ring::before,.hh-pulse-ring::after,.hh-pop-in,.hh-rise,.hh-bar{ animation:none !important; }
+  }
+
+  /* ---------- leaderboard ---------- */
+  .hh-lb-wrap{ width:100%; padding:0 24px 8px; }
+  .hh-lb{ max-width:420px; margin:0 auto; border:1px solid var(--border); border-radius:16px; padding:18px; background:rgba(250,250,250,0.6); backdrop-filter:blur(4px); }
+  .hh-lb-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .hh-lb-head p{ font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.2em; color:var(--muted); margin:0; }
+  .hh-lb-head span{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .hh-lb ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .hh-lb li{ position:relative; display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:11px; overflow:hidden; }
+  .hh-lb li.current{ background:rgba(75,60,255,0.08); }
+  .hh-lb-bar{ position:absolute; inset-block:0; left:0; border-radius:11px; }
+  .hh-lb-rank{ position:relative; z-index:1; width:22px; height:22px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex:none; }
+  .hh-lb-rank.top{ background:var(--accent); color:#fff; }
+  .hh-lb-rank.other{ background:#ececec; color:var(--muted); }
+  .hh-lb-label{ position:relative; z-index:1; flex:1; font-size:13.5px; }
+  .hh-lb-label.top{ font-weight:600; color:var(--fg); }
+  .hh-lb-label.current{ font-weight:600; color:var(--accent); }
+  .hh-lb-time{ position:relative; z-index:1; font-family:'JetBrains Mono',monospace; font-size:13.5px; }
+  .hh-lb-time.current{ color:var(--accent); }
+  .hh-lb-time small{ margin-left:2px; font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<button class="hh-sidebar-toggle" id="sidebarToggle" aria-label="Open menu">
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="9" y1="4" x2="9" y2="20" stroke="currentColor" stroke-width="1.6"/>
+  </svg>
+</button>
+
+<div class="hh-backdrop" id="backdrop"></div>
+
+<div class="hh-sidebar" id="sidebar">
+  <div>
+    <div class="hh-sidebar-brand">
+      <span class="mark">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13 3 L6 13 H11 L10 21 L18 10 H13 L14 3 Z" fill="white"/>
+        </svg>
+      </span>
+      <span>HurryHurry</span>
+    </div>
+    <p class="hh-sidebar-label">How it works</p>
+    <ul>
+      <li>Tap or press Space to start.</li>
+      <li>Wait for the screen to turn green — tapping early is a false start.</li>
+      <li>The moment it turns green, tap as fast as you can.</li>
+      <li>Your best 5 times are saved on this device.</li>
+    </ul>
+  </div>
+  <div>
+    <a class="hh-sidebar-support" href="https://ko-fi.com/zotson" target="_blank" rel="noopener noreferrer">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 21s-7.5-4.6-10-9.3C0.3 8.2 2 4.5 5.6 4.1c2-.2 3.6.8 4.4 2.3.8-1.5 2.4-2.5 4.4-2.3 3.6.4 5.3 4.1 3.6 7.6C19.5 16.4 12 21 12 21z" stroke="currentColor" stroke-width="1.6"/></svg>
+      Support this project
+    </a>
+    <p class="hh-sidebar-credit">HurryHurry is a <a href="https://zotson.com" target="_blank" rel="noopener noreferrer">Zotson</a> project.</p>
+    <p class="hh-sidebar-copy">© 2026 Zotson</p>
+  </div>
+</div>
+
+<div class="hh-shift" id="shiftWrap">
+
+  <button class="hh-surface" id="surface" aria-label="Tap to start the reaction time test">
+    <img id="markImg" class="hh-mark" style="display:none" alt="">
+    <div class="mark-svg" id="markSvg" style="display:none">
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="56" height="56" rx="14" fill="#4b3cff"/>
+        <path d="M30 10 L15 30 H24 L22 46 L41 22 H31 L33 10 Z" fill="white"/>
+      </svg>
+    </div>
+    <p class="hh-eyebrow" id="eyebrow">Reaction Time Test</p>
+    <span class="hh-calc-spin" id="calcSpin" style="display:none">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="#4b3cff" stroke-width="2.5" stroke-dasharray="40" stroke-linecap="round"/></svg>
+    </span>
+    <h1 class="hh-headline" id="headline">How fast are you?</h1>
+    <p class="hh-sub" id="sub">When the screen turns green, tap as fast as you can.</p>
+    <div class="hh-kbd-hint" id="kbdHint"><kbd>Space</kbd><span>or tap anywhere to start</span></div>
+    <div id="badgeSlot"></div>
+    <div class="hh-pulse-ring" id="pulseRing" style="display:none; position:absolute; inset:0;"></div>
+    <div class="hh-flash" id="flashEl" style="display:none;"></div>
+  </button>
+
+  <div class="hh-lb-wrap"><div class="hh-lb" id="lbCard" style="display:none;">
+    <div class="hh-lb-head"><p>Best times</p><span id="lbCount">0/5</span></div>
+    <ol id="lbList"></ol>
+  </div></div>
+
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const LEADERBOARD_KEY = 'reaction-best-times';
+  const MAX_ENTRIES = 5;
+  const CALC_DURATION = 900;
+
+  let state = 'idle'; // idle | waiting | ready | tooSoon | calculating | result
+  let result = null, calcValue = 0, times = [], isBest = false;
+  let timeoutId = null, calcTimeoutId = null, calcIntervalId = null, startTime = 0;
+
+  function loadTimes(){
+    try {
+      const raw = localStorage.getItem(LEADERBOARD_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter(n => typeof n === 'number').slice(0, MAX_ENTRIES) : [];
+    } catch { return []; }
+  }
+  function saveTimes(t){ try { localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(t)); } catch {} }
+  function tierFor(ms){ if (ms < 400) return 'fast'; if (ms < 600) return 'mid'; return 'slow'; }
+
+  function clearPending(){
+    if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+    if (calcTimeoutId) { clearTimeout(calcTimeoutId); calcTimeoutId = null; }
+    if (calcIntervalId) { clearInterval(calcIntervalId); calcIntervalId = null; }
+  }
+
+  function beginWaiting(){
+    clearPending();
+    state = 'waiting'; result = null; isBest = false;
+    render();
+    const delay = 1200 + Math.random() * 2800;
+    timeoutId = setTimeout(() => { startTime = performance.now(); state = 'ready'; render(); }, delay);
+  }
+
+  function recordTime(ms){
+    const prevBest = times.length ? times[0] : null;
+    const next = [...times, ms].sort((a,b) => a-b).slice(0, MAX_ENTRIES);
+    times = next;
+    saveTimes(next);
+    isBest = next[0] === ms && (prevBest === null || ms < prevBest);
+  }
+
+  function beginCalculating(ms){
+    result = ms; state = 'calculating'; render();
+    calcIntervalId = setInterval(() => { calcValue = Math.round(150 + Math.random()*600); render(); }, 70);
+    calcTimeoutId = setTimeout(() => {
+      if (calcIntervalId) { clearInterval(calcIntervalId); calcIntervalId = null; }
+      recordTime(ms);
+      state = 'result';
+      render();
+    }, CALC_DURATION);
+  }
+
+  function handleTap(){
+    switch(state){
+      case 'idle': case 'result': case 'tooSoon': beginWaiting(); break;
+      case 'waiting': clearPending(); state = 'tooSoon'; render(); break;
+      case 'ready': {
+        const ms = Math.round(performance.now() - startTime);
+        beginCalculating(ms);
+        break;
+      }
+      case 'calculating': break;
+    }
+  }
+
+  $('surface').addEventListener('click', handleTap);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); handleTap(); }
+  });
+
+  function boardContent(){
+    switch(state){
+      case 'waiting': return { surface:'waiting', eyebrow:'Get ready', headline:'Wait for green', sub:"Don't tap yet." };
+      case 'ready': return { surface:'ready', eyebrow:'Now', headline:'Tap!', sub:'As fast as you can.' };
+      case 'tooSoon': return { surface:'', eyebrow:'Too soon', headline:'False start', sub:'You tapped before it turned green. Tap to try again.' };
+      case 'calculating': return { surface:'', eyebrow:'HurryHurry', headline: calcValue + ' ms', sub:'Calculating…', calculating:true };
+      case 'result': {
+        const tier = result !== null ? tierFor(result) : 'mid';
+        const verdict = tier === 'fast' ? 'Lightning fast! Tap to go again.' : tier === 'mid' ? 'Solid speed. Tap to go again.' : 'Snail pace — tap to go again.';
+        return { surface:'', eyebrow:'HurryHurry', headline:(result !== null ? result + ' ms' : '—'), sub:verdict, tier, resultMode:true };
+      }
+      default: return { surface:'', eyebrow:'HurryHurry', headline:'How fast are you?', sub:'When the screen turns green, tap as fast as you can.', idle:true };
+    }
+  }
+
+  function render(){
+    const b = boardContent();
+    const surfaceEl = $('surface');
+    surfaceEl.className = 'hh-surface' + (b.surface ? ' ' + b.surface : '');
+    surfaceEl.setAttribute('aria-label',
+      state === 'waiting' ? 'Waiting — do not tap until the screen turns green' :
+      state === 'ready' ? 'Tap now' :
+      state === 'tooSoon' ? 'False start. Tap to try again' :
+      state === 'calculating' ? 'Calculating your reaction time' :
+      state === 'result' ? `Your reaction time was ${result} milliseconds. Tap to play again` :
+      'Tap to start the reaction time test');
+
+    const showMark = b.eyebrow === 'HurryHurry';
+    $('eyebrow').textContent = b.eyebrow;
+    $('eyebrow').style.display = showMark ? 'none' : 'block';
+    $('markImg').style.display = 'none'; // no raster asset in this build; SVG mark used instead
+    $('markSvg').style.display = showMark ? 'block' : 'none';
+
+    $('headline').textContent = b.headline;
+    $('headline').className = 'hh-headline' + (b.resultMode || b.calculating ? ' result' : '');
+    $('headline').style.opacity = b.calculating ? '0.4' : '1';
+    $('headline').style.fontFamily = (b.resultMode || b.calculating) ? "'JetBrains Mono',monospace" : "'Manrope',sans-serif";
+
+    $('sub').textContent = b.sub;
+    $('calcSpin').style.display = state === 'calculating' ? 'inline-block' : 'none';
+    $('kbdHint').style.display = state === 'idle' ? 'flex' : 'none';
+
+    $('pulseRing').style.display = state === 'ready' ? 'block' : 'none';
+    $('flashEl').style.display = 'none';
+    if (state === 'result' && b.tier === 'fast') {
+      $('flashEl').style.display = 'block';
+      void $('flashEl').offsetWidth; // restart animation
+      $('flashEl').style.animation = 'none';
+      requestAnimationFrame(() => { $('flashEl').style.animation = ''; });
+    }
+
+    // badge
+    const badgeSlot = $('badgeSlot');
+    badgeSlot.innerHTML = '';
+    if (state === 'result' && isBest) {
+      const el = document.createElement('span');
+      el.className = 'hh-badge best hh-pop-in';
+      el.textContent = 'New personal best';
+      badgeSlot.appendChild(el);
+    } else if (state === 'result' && !isBest && result !== null && times.length > 0 && result > times[0]) {
+      const el = document.createElement('span');
+      el.className = 'hh-badge off hh-pop-in';
+      el.textContent = `+${result - times[0]} ms off your best`;
+      badgeSlot.appendChild(el);
+    }
+
+    renderLeaderboard();
+  }
+
+  function renderLeaderboard(){
+    const card = $('lbCard');
+    if (times.length === 0) { card.style.display = 'none'; return; }
+    card.style.display = 'block';
+    $('lbCount').textContent = `${times.length}/${MAX_ENTRIES}`;
+    const list = $('lbList');
+    list.innerHTML = '';
+    const fastest = times[0];
+    times.forEach((time, i) => {
+      const isCurrent = state === 'result' && time === result;
+      const isTop = i === 0;
+      const ratio = Math.max(0.12, fastest / time);
+      const li = document.createElement('li');
+      li.className = isCurrent ? 'current' : '';
+      li.innerHTML = `
+        <span class="hh-lb-bar hh-bar" style="width:100%; --bar:${ratio}; background-color:${isCurrent ? 'rgba(75,60,255,0.12)' : isTop ? 'rgba(75,60,255,0.08)' : '#f0f0f0'};"></span>
+        <span class="hh-lb-rank ${isTop ? 'top' : 'other'}">${i+1}</span>
+        <span class="hh-lb-label ${isTop ? 'top' : ''} ${isCurrent ? 'current' : ''}">${isTop ? 'Personal best' : 'Attempt'}</span>
+        <span class="hh-lb-time ${isCurrent ? 'current' : ''}">${time}<small>ms</small></span>
+      `;
+      list.appendChild(li);
+    });
+  }
+
+  // sidebar toggle
+  const sidebar = $('sidebar'), backdrop = $('backdrop'), shiftWrap = $('shiftWrap');
+  $('sidebarToggle').addEventListener('click', () => {
+    const open = sidebar.classList.toggle('open');
+    shiftWrap.classList.toggle('open', open);
+    backdrop.classList.toggle('show', open);
+  });
+  backdrop.addEventListener('click', () => {
+    sidebar.classList.remove('open'); shiftWrap.classList.remove('open'); backdrop.classList.remove('show');
+  });
+
+  times = loadTimes();
+  render();
+})();
+</script>
+</body>
+</html>
